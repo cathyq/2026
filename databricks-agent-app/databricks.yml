@@ -1,0 +1,127 @@
+# Databricks Asset Bundle Configuration
+# Deploy this app using: databricks bundle deploy
+
+bundle:
+  name: databricks-agent-app
+
+variables:
+  lakebase_instance_name:
+    description: "Name of the Lakebase instance"
+    default: ""
+  lakebase_database_name:
+    description: "Name of the Lakebase database"
+    default: ""
+  lakebase_catalog_name:
+    description: "Name of the Lakebase catalog"
+    default: ""
+  model_endpoint:
+    description: "Databricks Model Serving endpoint for the LLM"
+    default: "databricks-claude-3-5-sonnet"
+
+targets:
+  # Development target
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: ${var.databricks_host}
+
+    resources:
+      apps:
+        databricks_agent_app:
+          name: "databricks-agent-app-dev"
+          description: "AI Agent with Long-Term Memory (Development)"
+
+          source_code_path: .
+
+          resources:
+            - name: lakebase-instance-name
+              secret:
+                scope: agent-app-secrets
+                key: lakebase-instance-name
+            - name: lakebase-database-name
+              secret:
+                scope: agent-app-secrets
+                key: lakebase-database-name
+            - name: lakebase-catalog-name
+              secret:
+                scope: agent-app-secrets
+                key: lakebase-catalog-name
+            - name: model-endpoint
+              secret:
+                scope: agent-app-secrets
+                key: model-endpoint
+
+          permissions:
+            - user_name: ${var.developer_user}
+              level: CAN_MANAGE
+
+  # Staging target
+  staging:
+    mode: development
+    workspace:
+      host: ${var.databricks_host}
+
+    resources:
+      apps:
+        databricks_agent_app:
+          name: "databricks-agent-app-staging"
+          description: "AI Agent with Long-Term Memory (Staging)"
+
+          source_code_path: .
+
+          resources:
+            - name: lakebase-instance-name
+              secret:
+                scope: agent-app-secrets-staging
+                key: lakebase-instance-name
+            - name: lakebase-database-name
+              secret:
+                scope: agent-app-secrets-staging
+                key: lakebase-database-name
+            - name: lakebase-catalog-name
+              secret:
+                scope: agent-app-secrets-staging
+                key: lakebase-catalog-name
+            - name: model-endpoint
+              secret:
+                scope: agent-app-secrets-staging
+                key: model-endpoint
+
+  # Production target
+  prod:
+    mode: production
+    workspace:
+      host: ${var.databricks_host_prod}
+
+    resources:
+      apps:
+        databricks_agent_app:
+          name: "databricks-agent-app"
+          description: "AI Agent with Long-Term Memory (Production)"
+
+          source_code_path: .
+
+          resources:
+            - name: lakebase-instance-name
+              secret:
+                scope: agent-app-secrets-prod
+                key: lakebase-instance-name
+            - name: lakebase-database-name
+              secret:
+                scope: agent-app-secrets-prod
+                key: lakebase-database-name
+            - name: lakebase-catalog-name
+              secret:
+                scope: agent-app-secrets-prod
+                key: lakebase-catalog-name
+            - name: model-endpoint
+              secret:
+                scope: agent-app-secrets-prod
+                key: model-endpoint
+
+          permissions:
+            - group_name: data-engineers
+              level: CAN_VIEW
+            - group_name: ml-engineers
+              level: CAN_MANAGE
