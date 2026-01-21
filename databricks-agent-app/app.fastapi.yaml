@@ -1,20 +1,13 @@
-# Databricks App Configuration - Streamlit Version
-# This file defines how the Streamlit app runs on Databricks Apps
-#
-# For FastAPI version, rename app.fastapi.yaml to app.yaml
+# Databricks App Configuration
+# This file defines how the app runs on Databricks Apps
 
 command:
-  - "streamlit"
-  - "run"
-  - "streamlit_app.py"
-  - "--server.port"
-  - "8000"
-  - "--server.address"
+  - "uvicorn"
+  - "src.app:app"
+  - "--host"
   - "0.0.0.0"
-  - "--server.headless"
-  - "true"
-  - "--browser.gatherUsageStats"
-  - "false"
+  - "--port"
+  - "8000"
 
 env:
   # Lakebase Configuration

@@ -6,22 +6,25 @@ AI Agent with Long-Term Memory using Databricks Lakebase and LangGraph.
 
 - **Short-term Memory**: Maintains conversation context within a session using PostgresSaver checkpointing
 - **Long-term Memory**: Remembers important information across conversations using PostgresStore
-- **FastAPI Backend**: Production-ready REST API with streaming support
-- **Gradio UI**: Interactive chat interface
+- **Multiple UI Options**: Streamlit (default) or FastAPI + Gradio
 - **Automatic Token Refresh**: OAuth tokens are refreshed automatically before expiration
 - **Connection Pooling**: Efficient database connection management
 
 ## Architecture
 
+### Streamlit Version (Default)
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                     Databricks Apps                              │
 ├─────────────────────────────────────────────────────────────────┤
-│  ┌─────────────┐    ┌─────────────────┐    ┌─────────────────┐ │
-│  │  Gradio UI  │───▶│   FastAPI API   │───▶│  Memory Agent   │ │
-│  └─────────────┘    └─────────────────┘    └─────────────────┘ │
-│                              │                      │           │
-│                              ▼                      ▼           │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │                   Streamlit App                          │   │
+│  │  ┌─────────────┐              ┌─────────────────────┐   │   │
+│  │  │   Chat UI   │─────────────▶│    Memory Agent     │   │   │
+│  │  └─────────────┘              └─────────────────────┘   │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                              │                                  │
+│                              ▼                                  │
 │                     ┌─────────────────────────────────┐        │
 │                     │      LangGraph + LangChain      │        │
 │                     └─────────────────────────────────┘        │
@@ -38,36 +41,48 @@ AI Agent with Long-Term Memory using Databricks Lakebase and LangGraph.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+### FastAPI Version (Alternative)
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  ┌─────────────┐    ┌─────────────────┐    ┌─────────────────┐ │
+│  │  Gradio UI  │───▶│   FastAPI API   │───▶│  Memory Agent   │ │
+│  └─────────────┘    └─────────────────┘    └─────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+```
+
 ## Project Structure
 
 ```
 databricks-agent-app/
-├── app.yaml                 # Databricks Apps configuration
+├── app.yaml                 # Streamlit app config (default)
+├── app.fastapi.yaml         # FastAPI app config (alternative)
 ├── databricks.yml           # Asset Bundles deployment config
 ├── requirements.txt         # Python dependencies
-├── .env.example            # Environment variables template
+├── .env.example             # Environment variables template
 ├── README.md
+├── streamlit_app.py         # Standalone Streamlit application
 ├── src/
 │   ├── __init__.py
-│   ├── app.py              # FastAPI application
+│   ├── app.py               # FastAPI application
 │   ├── core/
 │   │   ├── __init__.py
-│   │   ├── config.py       # Configuration settings
-│   │   └── database.py     # Lakebase connection manager
+│   │   ├── config.py        # Configuration settings
+│   │   └── database.py      # Lakebase connection manager
 │   ├── agent/
 │   │   ├── __init__.py
-│   │   └── memory_agent.py # LangGraph agent with memory
+│   │   └── memory_agent.py  # LangGraph agent with memory
 │   ├── models/
 │   │   ├── __init__.py
-│   │   └── chat.py         # Pydantic models
+│   │   └── chat.py          # Pydantic models
 │   └── routers/
 │       ├── __init__.py
 │       └── v1/
 │           ├── __init__.py
-│           ├── chat.py     # Chat API endpoints
-│           └── health.py   # Health check endpoints
+│           ├── chat.py      # Chat API endpoints
+│           └── health.py    # Health check endpoints
 └── ui/
-    └── chat_ui.py          # Gradio chat interface
+    ├── chat_ui.py           # Gradio chat interface
+    └── streamlit_app.py     # Streamlit chat interface (API client)
 ```
 
 ## Prerequisites
@@ -76,6 +91,38 @@ databricks-agent-app/
 2. **Lakebase Instance** created and configured
 3. **Databricks CLI** installed and configured
 4. **Model Serving Endpoint** (e.g., `databricks-claude-3-5-sonnet`)
+
+## Quick Start
+
+### Option 1: Streamlit (Recommended)
+
+```bash
+cd databricks-agent-app
+cp .env.example .env
+# Edit .env with your configuration
+
+pip install -r requirements.txt
+
+# Run Streamlit app
+streamlit run streamlit_app.py
+```
+
+Open http://localhost:8501 in your browser.
+
+### Option 2: FastAPI + API
+
+```bash
+cd databricks-agent-app
+cp .env.example .env
+# Edit .env with your configuration
+
+pip install -r requirements.txt
+
+# Run FastAPI backend
+uvicorn src.app:app --reload --port 8000
+```
+
+Open http://localhost:8000/docs for API documentation.
 
 ## Setup
 
@@ -102,35 +149,33 @@ databricks secrets put-secret agent-app-secrets lakebase-catalog-name --string-v
 databricks secrets put-secret agent-app-secrets model-endpoint --string-value "databricks-claude-3-5-sonnet"
 ```
 
-### 3. Local Development
+### 3. Deploy to Databricks Apps
 
+**Deploy Streamlit version (default):**
 ```bash
-# Clone and setup
-cd databricks-agent-app
-cp .env.example .env
-# Edit .env with your configuration
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run locally
-uvicorn src.app:app --reload --port 8000
-```
-
-### 4. Deploy to Databricks Apps
-
-```bash
-# Validate bundle
-databricks bundle validate
-
-# Deploy to dev
 databricks bundle deploy --target dev
-
-# Deploy to production
-databricks bundle deploy --target prod
 ```
 
-## API Endpoints
+**Deploy FastAPI version:**
+```bash
+# Swap the app.yaml files
+mv app.yaml app.streamlit.yaml
+mv app.fastapi.yaml app.yaml
+
+databricks bundle deploy --target dev
+```
+
+## UI Comparison
+
+| Feature | Streamlit | FastAPI + Gradio |
+|---------|-----------|------------------|
+| **Simplicity** | Single file, direct agent access | Separate frontend/backend |
+| **API Access** | No REST API | Full REST API with docs |
+| **Streaming** | Built-in support | SSE endpoint |
+| **Customization** | Streamlit components | Full control |
+| **Best For** | Quick demos, internal tools | Production APIs, integrations |
+
+## API Endpoints (FastAPI Version)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -194,6 +239,21 @@ The agent automatically stores information when users:
 | `DATABRICKS_MODEL_ENDPOINT` | LLM endpoint | `databricks-claude-3-5-sonnet` |
 | `DB_POOL_SIZE` | Connection pool size | `5` |
 | `DB_MAX_OVERFLOW` | Max overflow connections | `10` |
+
+## Switching Between UI Versions
+
+To switch from Streamlit to FastAPI:
+
+```bash
+# Backup current config
+mv app.yaml app.streamlit.yaml
+
+# Use FastAPI config
+mv app.fastapi.yaml app.yaml
+
+# Redeploy
+databricks bundle deploy --target dev
+```
 
 ## License
 
