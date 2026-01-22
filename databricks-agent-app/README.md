@@ -6,9 +6,11 @@ AI Agent with Long-Term Memory using Databricks Lakebase and LangGraph.
 
 - **Short-term Memory**: Maintains conversation context within a session using PostgresSaver checkpointing
 - **Long-term Memory**: Remembers important information across conversations using PostgresStore
-- **Multiple UI Options**: Streamlit (default) or FastAPI + Gradio
+- **Multiple Backend Options**: Streamlit (default), FastAPI + Gradio, or MLflow Agent Server
+- **MLflow Agent Server**: OpenAI-compatible `/invocations` endpoint with ResponsesAgent schema
 - **Automatic Token Refresh**: OAuth tokens are refreshed automatically before expiration
 - **Connection Pooling**: Efficient database connection management
+- **MLflow Tracing**: Automatic tracing integration for observability
 
 ## Architecture
 
@@ -50,17 +52,41 @@ AI Agent with Long-Term Memory using Databricks Lakebase and LangGraph.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+### MLflow Agent Server Version (Production)
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     MLflow Agent Server                          │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │              /invocations Endpoint                       │   │
+│  │  ┌─────────────────┐    ┌─────────────────────────────┐ │   │
+│  │  │ ResponsesAgent  │───▶│  MemoryAgent (LangGraph)    │ │   │
+│  │  │ Request/Response│    │  + Lakebase Persistence     │ │   │
+│  │  └─────────────────┘    └─────────────────────────────┘ │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                              │                                  │
+│                              ▼                                  │
+│                     ┌─────────────────────────────────┐        │
+│                     │        MLflow Tracing           │        │
+│                     └─────────────────────────────────┘        │
+└─────────────────────────────────────────────────────────────────┘
+```
+
 ## Project Structure
 
 ```
 databricks-agent-app/
 ├── app.yaml                 # Streamlit app config (default)
 ├── app.fastapi.yaml         # FastAPI app config (alternative)
+├── app.agent-server.yaml    # MLflow Agent Server config
 ├── databricks.yml           # Asset Bundles deployment config
 ├── requirements.txt         # Python dependencies
 ├── .env.example             # Environment variables template
 ├── README.md
 ├── streamlit_app.py         # Standalone Streamlit application
+├── streamlit_local.py       # Local dev Streamlit (in-memory storage)
+├── agent_server.py          # MLflow Agent Server handlers
+├── start_server.py          # MLflow Agent Server entry point
 ├── src/
 │   ├── __init__.py
 │   ├── app.py               # FastAPI application
@@ -70,7 +96,8 @@ databricks-agent-app/
 │   │   └── database.py      # Lakebase connection manager
 │   ├── agent/
 │   │   ├── __init__.py
-│   │   └── memory_agent.py  # LangGraph agent with memory
+│   │   ├── memory_agent.py  # LangGraph agent with memory
+│   │   └── responses_agent.py # MLflow ResponsesAgent wrapper
 │   ├── models/
 │   │   ├── __init__.py
 │   │   └── chat.py          # Pydantic models
@@ -124,6 +151,29 @@ uvicorn src.app:app --reload --port 8000
 
 Open http://localhost:8000/docs for API documentation.
 
+### Option 3: MLflow Agent Server (Production)
+
+The MLflow Agent Server provides an OpenAI-compatible `/invocations` endpoint with automatic request/response validation and MLflow tracing.
+
+```bash
+cd databricks-agent-app
+cp .env.example .env
+# Edit .env with your configuration
+
+pip install -r requirements.txt
+
+# Run MLflow Agent Server
+python start_server.py
+
+# Or with uvicorn for development
+uvicorn start_server:app --reload --port 8000
+```
+
+The server exposes:
+- `POST /invocations` - Chat endpoint (ResponsesAgent schema)
+- `GET /health` - Health check
+- `GET /version` - Version information
+
 ## Setup
 
 ### 1. Create Lakebase Resources
@@ -165,15 +215,25 @@ mv app.fastapi.yaml app.yaml
 databricks bundle deploy --target dev
 ```
 
-## UI Comparison
+**Deploy MLflow Agent Server version:**
+```bash
+# Swap the app.yaml files
+mv app.yaml app.streamlit.yaml
+mv app.agent-server.yaml app.yaml
 
-| Feature | Streamlit | FastAPI + Gradio |
-|---------|-----------|------------------|
-| **Simplicity** | Single file, direct agent access | Separate frontend/backend |
-| **API Access** | No REST API | Full REST API with docs |
-| **Streaming** | Built-in support | SSE endpoint |
-| **Customization** | Streamlit components | Full control |
-| **Best For** | Quick demos, internal tools | Production APIs, integrations |
+databricks bundle deploy --target dev
+```
+
+## Backend Comparison
+
+| Feature | Streamlit | FastAPI + Gradio | MLflow Agent Server |
+|---------|-----------|------------------|---------------------|
+| **Simplicity** | Single file | Separate frontend/backend | Single endpoint |
+| **API Access** | No REST API | Custom REST API | OpenAI-compatible API |
+| **Streaming** | Built-in | SSE endpoint | SSE with ResponsesAgent |
+| **Tracing** | Manual | Manual | Automatic MLflow tracing |
+| **Validation** | Manual | Pydantic | Automatic ResponsesAgent |
+| **Best For** | Quick demos | Custom integrations | Production deployments |
 
 ## API Endpoints (FastAPI Version)
 
@@ -206,6 +266,72 @@ curl -X POST "http://localhost:8000/api/v1/chat" \
   "user_id": "user_456"
 }
 ```
+
+## API Endpoints (MLflow Agent Server)
+
+The MLflow Agent Server exposes a single `/invocations` endpoint that follows the [ResponsesAgent schema](https://mlflow.org/docs/latest/genai/serving/responses-agent/).
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/invocations` | Chat endpoint (set `stream: true` for streaming) |
+| `GET` | `/health` | Health check |
+| `GET` | `/version` | Version information |
+
+### Example Request (Non-streaming)
+
+```bash
+curl -X POST "http://localhost:8000/invocations" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": [
+      {"role": "user", "content": "My name is Alex and I work at Acme Corp"}
+    ],
+    "context": {
+      "conversation_id": "thread_123",
+      "user_id": "user_456"
+    }
+  }'
+```
+
+### Example Response
+
+```json
+{
+  "output": [
+    {
+      "type": "message",
+      "id": "msg_abc123",
+      "status": "completed",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "output_text",
+          "text": "Nice to meet you, Alex! I'll remember that you work at Acme Corp."
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Example Request (Streaming)
+
+```bash
+curl -X POST "http://localhost:8000/invocations" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": [
+      {"role": "user", "content": "What do you know about me?"}
+    ],
+    "context": {
+      "conversation_id": "thread_123",
+      "user_id": "user_456"
+    },
+    "stream": true
+  }'
+```
+
+The streaming response uses Server-Sent Events (SSE) format with `ResponsesAgentStreamEvent` objects.
 
 ## Memory System
 
@@ -240,18 +366,26 @@ The agent automatically stores information when users:
 | `DB_POOL_SIZE` | Connection pool size | `5` |
 | `DB_MAX_OVERFLOW` | Max overflow connections | `10` |
 
-## Switching Between UI Versions
+## Switching Between Backend Versions
 
-To switch from Streamlit to FastAPI:
-
+### Switch to FastAPI:
 ```bash
-# Backup current config
 mv app.yaml app.streamlit.yaml
-
-# Use FastAPI config
 mv app.fastapi.yaml app.yaml
+databricks bundle deploy --target dev
+```
 
-# Redeploy
+### Switch to MLflow Agent Server:
+```bash
+mv app.yaml app.streamlit.yaml
+mv app.agent-server.yaml app.yaml
+databricks bundle deploy --target dev
+```
+
+### Switch back to Streamlit:
+```bash
+mv app.yaml app.agent-server.yaml  # or app.fastapi.yaml
+mv app.streamlit.yaml app.yaml
 databricks bundle deploy --target dev
 ```
 

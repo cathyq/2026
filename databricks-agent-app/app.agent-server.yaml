@@ -1,0 +1,52 @@
+# Databricks App Configuration - MLflow Agent Server Version
+# This file defines how the MLflow Agent Server runs on Databricks Apps
+#
+# To use this configuration:
+#   mv app.yaml app.streamlit.yaml
+#   mv app.agent-server.yaml app.yaml
+#   databricks bundle deploy --target dev
+
+command:
+  - "python"
+  - "start_server.py"
+  - "--port"
+  - "8000"
+  - "--host"
+  - "0.0.0.0"
+
+env:
+  # Lakebase Configuration
+  - name: LAKEBASE_INSTANCE_NAME
+    valueFrom: "{{secrets.lakebase-instance-name}}"
+  - name: LAKEBASE_DATABASE_NAME
+    valueFrom: "{{secrets.lakebase-database-name}}"
+  - name: LAKEBASE_CATALOG_NAME
+    valueFrom: "{{secrets.lakebase-catalog-name}}"
+
+  # Database Connection Settings
+  - name: DATABRICKS_DATABASE_PORT
+    value: "5432"
+  - name: DEFAULT_POSTGRES_SCHEMA
+    value: "public"
+
+  # Connection Pool Settings
+  - name: DB_POOL_SIZE
+    value: "5"
+  - name: DB_MAX_OVERFLOW
+    value: "10"
+  - name: DB_POOL_TIMEOUT
+    value: "30"
+  - name: DB_POOL_RECYCLE_INTERVAL
+    value: "3600"
+
+  # Agent Configuration
+  - name: DATABRICKS_MODEL_ENDPOINT
+    valueFrom: "{{secrets.model-endpoint}}"
+  - name: AGENT_SYSTEM_PROMPT
+    value: "You are a helpful AI assistant with long-term memory capabilities. You can remember information from previous conversations."
+
+  # MLflow Configuration
+  - name: MLFLOW_TRACKING_URI
+    value: "databricks"
+  - name: MLFLOW_ENABLE_ASYNC_LOGGING
+    value: "true"
